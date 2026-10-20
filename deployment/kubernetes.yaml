@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: heart-risk-api
+  labels:
+    app: heart-risk-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: heart-risk-api
+  template:
+    metadata:
+      labels:
+        app: heart-risk-api
+    spec:
+      containers:
+        - name: api
+          image: heart-risk-api:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: heart-risk-api
+  labels:
+    app: heart-risk-api
+spec:
+  type: LoadBalancer
+  selector:
+    app: heart-risk-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

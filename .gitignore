@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+data/raw/*
+artifacts/*.joblib
+artifacts/*_evaluation.png
+artifacts/eda/*.png
+artifacts/training_summary.json
+mlflow.db
+mlflow.db-shm
+mlflow.db-wal
+mlruns/
