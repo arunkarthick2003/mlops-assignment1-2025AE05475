@@ -102,7 +102,9 @@ Local verification completed: six pytest tests passed, Ruff passed, the Docker i
 ## Project files and reports
 
 - [Detailed report (Markdown)](REPORT.md)
-- [Final report (DOCX)](Heart_Disease_MLOps_Report.docx)
+- [Final report (DOCX)](Heart_Disease_MLOps_Report_Final.docx)
+- [Presentation walkthrough guide](PRESENTATION_GUIDE.md)
+- `video_presentation_a3095887_compressed.mp4`: compressed assignment walkthrough video.
 - `scripts/`: data download, EDA, model training, and DOCX report generation.
 - `src/heart_mlops/`: data, model, and API implementation.
 - `tests/`: data/pipeline and API tests.

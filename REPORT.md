@@ -125,4 +125,4 @@ Within those limits, the assignment demonstrates a reproducible workflow from UC
 4. FastAPI documentation: request validation and API serving.
 5. Prometheus documentation: exposition format and scraping.
 
-**Walkthrough video:** No recording is included in the repository yet; add your own short pipeline recording before final submission.
+**Walkthrough video:** `video_presentation_a3095887_compressed.mp4` (approximately 10 minutes 6 seconds; approximately 10.6 MB). The uncompressed source recording is intentionally excluded from Git because it is approximately 636 MB.

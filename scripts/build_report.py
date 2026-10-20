@@ -21,7 +21,7 @@ from heart_mlops.model import validate_features
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts"
 SCREENSHOTS = ROOT / "screenshots"
-OUTPUT = ROOT / "Heart_Disease_MLOps_Report.docx"
+OUTPUT = ROOT / "Heart_Disease_MLOps_Report_Final.docx"
 REPOSITORY = "https://github.com/arunkarthick2003/mlops-assignment1-a3095887"
 CI_RUN = f"{REPOSITORY}/actions/runs/39411595260"
 
@@ -298,7 +298,7 @@ def main() -> None:
         "FastAPI documentation: Request models and API serving.",
         "Prometheus documentation: Client exposition format and scraping.",
     ])
-    add_paragraph(document, "Submission note: a short pipeline walkthrough video is still to be recorded and added by the student.")
+    add_paragraph(document, "Walkthrough video: video_presentation_a3095887_compressed.mp4 (approximately 10 minutes 6 seconds). The uncompressed source video is excluded from Git because it is approximately 636 MB.")
 
     document.core_properties.title = "End-to-End Heart Disease MLOps Report"
     document.core_properties.subject = "MLOps Assignment 01"
