@@ -1,139 +1,128 @@
 # End-to-End Heart Disease MLOps Report
 
-> Complete this report after running the project. Replace every bracketed field with observed results and add original analysis. The current workspace does not include deployment credentials, screenshots, a video, or a GitHub remote, so these items are intentionally left for the student to produce and verify.
+**Course:** Machine Learning Operations (MLOps), Assignment 01
+**Repository:** [github.com/arunkarthick2003/mlops-assignment1-a3095887](https://github.com/arunkarthick2003/mlops-assignment1-a3095887)
+**Author account:** `@arunkarthick2003`
 
-## 1. Executive summary
+> This is an educational machine-learning demonstration, not clinical software. It is not validated for diagnosis, treatment, or patient-care decisions.
 
-**Objective:** Build and operationalize a reproducible binary classifier using the UCI Heart Disease Cleveland dataset.
+## 1. Executive Summary
 
-**Selected model:** Logistic Regression (`C=0.1`), selected by mean stratified five-fold training ROC-AUC.
+This project implements a reproducible binary classifier for the Cleveland subset of the UCI Heart Disease dataset. It covers acquisition and preprocessing, exploratory data analysis, comparison of Logistic Regression and Random Forest, MLflow experiment tracking, automated tests and CI, a Dockerized FastAPI service, local Kubernetes deployment, and API logging/metrics.
 
-**Holdout metrics:** Accuracy 0.885, precision 0.839, recall 0.929, ROC-AUC 0.965. The positive class is disease present. In a medical screening context, missed positive cases are a serious concern, but these metrics are from a small historical dataset and do not justify clinical use.
+Logistic Regression with `C=0.1` was selected by stratified five-fold CV ROC-AUC on the training partition. On the separate 61-row holdout, it achieved accuracy `0.8852`, precision `0.8387`, recall `0.9286`, and ROC-AUC `0.9654`. The Random Forest baseline achieved holdout accuracy `0.8689`, precision `0.8125`, recall `0.9286`, and ROC-AUC `0.9589`.
 
-**Deployment status:** [Local Docker / local Kubernetes / public cloud, with verified URL or access instructions]
+The Docker image built successfully; health, prediction, and metrics endpoints were exercised. The Kubernetes Deployment reached 2/2 ready replicas, and the API was checked through a local port-forward. GitHub Actions run [39411595260](https://github.com/arunkarthick2003/mlops-assignment1-a3095887/actions/runs/39411595260) completed successfully. No public cloud endpoint or Grafana dashboard is claimed.
 
-## 2. Data and acquisition
+## 2. Problem, Dataset, and Architecture
 
-The project downloads the official UCI Heart Disease archive (dataset DOI: 10.24432/C52P4X), extracts the processed Cleveland data, and maps the original angiographic `num` target to absence (`0`) versus presence (`1`-`4`). The Cleveland subset contains 303 observations and 13 predictors. The raw file represents unknowns with `?`; the loader converts these to missing values. Record the actual class counts and missingness from your run here: [ ].
+The assignment asks for a heart-disease risk classifier delivered with reproducible training and an operational API. The dataset is the processed Cleveland subset from the [UCI Heart Disease collection](https://doi.org/10.24432/C52P4X). It contains 303 observations and 13 predictor variables. The original `num` field has values from zero to four; this project maps zero to the negative class and values one through four to the positive class.
 
-## 3. Exploratory analysis
+The implementation is divided into acquisition and analysis scripts, a Python package for data/model/API functionality, tests, CI configuration, and Kubernetes/Prometheus configuration. The deployment flow is:
 
-Generated figures: `artifacts/eda/distributions.png` and `artifacts/eda/correlation.png`. Describe the observed class balance, age distribution, notable correlations, and any limitations of interpreting these patterns from a small dataset: [ ]. Insert original figure screenshots or embed the generated images in the submitted report.
+```text
+UCI archive -> download/clean -> EDA and training -> MLflow + model artifact
+            -> Docker image -> Kubernetes Deployment/Service -> FastAPI
+            -> health, prediction, request logs, Prometheus metrics
+```
 
-## 4. Feature processing and model selection
+The repository is public at the URL above. The dataset’s UCI citation/DOI is included in the repository documentation.
 
-The inference and training schema contains age, sex, chest-pain type, resting blood pressure, cholesterol, fasting blood sugar, resting ECG, maximum heart rate, exercise-induced angina, ST depression, ST slope, fluoroscopy vessel count, and thalassemia category. Numeric fields receive median imputation and standard scaling. Categorical fields receive most-frequent imputation and one-hot encoding. All transformations reside in the sklearn pipeline and are fitted within cross-validation folds.
+## 3. Data Acquisition and Exploratory Analysis
 
-Candidates: Logistic Regression and Random Forest. Selection uses a stratified five-fold CV ROC-AUC grid search on the training split, with a stratified 80/20 holdout used for final reporting. Hyperparameter grids are defined in `scripts/train.py`. Fill this comparison from the MLflow experiment and `artifacts/training_summary.json`:
+`scripts/download_data.py` downloads the official UCI archive and extracts `processed.cleveland.data`. Unknown fields marked `?` are parsed as missing values. The cleaned data is written to `data/processed/heart_disease.csv`; raw source files are reproducible and not required to be committed.
 
-| Model | CV ROC-AUC | Holdout accuracy | Precision | Recall | Holdout ROC-AUC | Best parameters |
+The binary label counts are 164 negative and 139 positive. Six predictor cells are missing: four in `ca` and two in `thal`; all other predictors and the target are complete. No target values are used as features. Missing-value imputation is performed inside the model pipeline rather than by using statistics computed over the full dataset.
+
+EDA scripts create a class-balance/age-distribution figure and a correlation heatmap. The largest absolute Pearson correlations with the binary target in this dataset are `thal` (0.526), `ca` (0.460), `exang` (0.432), `oldpeak` (0.425), and `thalach` (-0.417). Several fields are categorical codes, so their Pearson correlations are descriptive only and should not be interpreted as linear clinical effects or causal relationships.
+
+![Age distributions and class balance](screenshots/eda-distributions.png)
+
+![Feature correlation heatmap](screenshots/eda-correlation.png)
+
+## 4. Feature Engineering and Training Protocol
+
+The 13 model inputs are `age`, `sex`, `cp`, `trestbps`, `chol`, `fbs`, `restecg`, `thalach`, `exang`, `oldpeak`, `slope`, `ca`, and `thal`. Numeric features are median-imputed and standardized. Categorical codes (`sex`, `cp`, `fbs`, `restecg`, `exang`, `slope`, `ca`, `thal`) are most-frequent-imputed and one-hot encoded with unknown categories ignored. These transformations are part of the scikit-learn pipeline and are fitted inside each CV fold.
+
+The data was divided using a stratified 80/20 holdout and fixed random seed 42. Hyperparameter selection used only the 242-row training partition, with five-fold stratified CV and ROC-AUC as the selection score. Logistic Regression was tested at `C` values 0.1, 1, and 10. Random Forest was tested with `max_depth` in `{None, 5}` and `min_samples_leaf` in `{1, 3}`, also with balanced class weights and a fixed seed.
+
+This protocol gives a reproducible comparison, but a single small holdout is noisy. The reported result should be interpreted as a coursework baseline, not a stable estimate of deployment performance.
+
+## 5. Model Results and Error Analysis
+
+| Candidate | Mean CV ROC-AUC | Holdout accuracy | Holdout precision | Holdout recall | Holdout ROC-AUC | Selected parameters |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Logistic Regression | 0.903 | 0.885 | 0.839 | 0.929 | 0.965 | `C=0.1` |
-| Random Forest | 0.902 | 0.869 | 0.813 | 0.929 | 0.959 | `max_depth=None`, `min_samples_leaf=3` |
+| Logistic Regression | 0.9028 | 0.8852 | 0.8387 | 0.9286 | 0.9654 | `C=0.1` |
+| Random Forest | 0.9019 | 0.8689 | 0.8125 | 0.9286 | 0.9589 | `max_depth=None`, `min_samples_leaf=3` |
 
-The two candidates have very similar CV ROC-AUC, with Logistic Regression ahead by about 0.001. On the fixed holdout, both have the same recall, while Logistic Regression has slightly higher accuracy, precision, and ROC-AUC. It is therefore selected as a compact baseline for this experiment, not as evidence of clinical suitability. Explain any further interpretation after reviewing the generated confusion matrix and ROC plot: [ ].
+Logistic Regression leads CV ROC-AUC by approximately 0.0009. Both candidates have the same positive-class recall on the holdout; Logistic Regression has higher accuracy, precision, and holdout ROC-AUC, so it was retained as the final baseline. The positive class is disease present. For the Logistic Regression holdout, the confusion matrix in `[negative, positive]` label order is `[[28, 5], [2, 26]]`: 28 true negatives, 5 false positives, 2 false negatives, and 26 true positives.
 
-## 5. Experiment tracking and reproducibility
+For a hypothetical screening workflow, a false negative may be consequential, but this assignment’s model is not a screening recommendation. The decision threshold remains the classifier’s default threshold; no clinical threshold analysis or calibration was performed. ROC-AUC measures ranking over thresholds and does not demonstrate that the predicted confidence values are calibrated probabilities.
 
-MLflow experiment: `uci-heart-disease-cleveland`, stored locally in `mlflow.db`. Each candidate run records model identity, CV selection parameters, seed, fold count, metrics, a classification report, evaluation plot, and the sklearn pipeline. The selected packaged model and summary are saved beneath `artifacts/`. Record the MLflow run IDs and dashboard screenshot: [ ].
+![Candidate confusion matrices and ROC curves](screenshots/model-results.png)
 
-## 6. Testing and CI/CD
+## 6. Experiment Tracking and Reproducibility
 
-Pytest covers raw parsing, unknown values, target mapping, missing feature validation, and end-to-end pipeline fitting/prediction. GitHub Actions runs Ruff, pytest, model training, and EDA, then uploads artifacts. Add the repository URL and a screenshot/link to the passing workflow run: [ ].
+MLflow experiment `uci-heart-disease-cleveland` uses the local SQLite store `mlflow.db`. Each candidate run records model identity, search parameters, random seed, fold count, CV/holdout metrics, a classification report, and an evaluation plot. The selected preprocessing/model pipeline is serialized as `artifacts/heart_disease_model.joblib`; the training summary is `artifacts/training_summary.json`.
 
-## 7. Serving, container and deployment
+The latest candidate run IDs recorded in the training summary are:
 
-FastAPI exposes `/health`, `/predict`, and `/metrics`. The prediction response includes the binary label and class confidence; request logs omit patient feature values. The Docker image contains the pre-trained serialized pipeline. Kubernetes manifests provide two replicas, readiness/liveness probes, resource limits, and a LoadBalancer Service.
+- Logistic Regression: `83dcf44e9edf4296ac210cd0c43fcbbe`
+- Random Forest: `5ba36aeea1d64c03a54d813b8a839b89`
 
-**Docker build and sample request evidence:** Not executed in the current environment; capture after Docker is available: [ ]
+The local MLflow UI is started with `mlflow ui --backend-store-uri sqlite:///mlflow.db`. The file `screenshots/mlflow-runs.png` is a formatted run-metrics summary exported from the tracked results; it is not a raw browser capture. The project also retains an experiment UI capture in `screenshots/mlflow-runs2.png`; it includes troubleshooting runs and is not used as the clean candidate comparison figure.
 
-**Deployment target and verified endpoint/access instructions:** Kubernetes manifests are prepared, but no cluster or cloud endpoint is available in the current environment: [ ]
+## 7. Model Packaging, API, and Docker
 
-**Kubernetes rollout evidence or cloud deployment URL:** Not yet produced; attach genuine verification after deployment: [ ]
+Preprocessing and classification are packaged together in the serialized scikit-learn pipeline. `requirements.txt` lists the Python dependencies, while the Dockerfile installs the application dependencies, adds the `src` package on `PYTHONPATH`, copies the trained model, and runs Uvicorn as a non-root user.
 
-## 8. Monitoring and operational considerations
+FastAPI provides:
 
-The Prometheus client exports request totals by method/path/status and request-duration histograms. Configure Prometheus using `deployment/prometheus.yml`; connect Grafana to Prometheus and create dashboard panels for request rate, error rate, and latency. Attach genuine screenshots and state the scrape target/status: [ ]. Do not log request bodies or retain patient data in application logs.
+- `GET /health`: returns success when the model artifact is loaded.
+- `POST /predict`: validates the 13 numeric feature fields and returns class, label, and confidence for the predicted class.
+- `GET /metrics`: exposes request counters and request-duration histograms in Prometheus format.
 
-## 9. Limitations, risks and next steps
+The sample prediction returned HTTP 200 and included the educational-use disclaimer. The Docker image `heart-risk-api:local` built successfully, and the container’s health, prediction, and metrics endpoints were exercised. Application logs record request ID, method, path, response status, and latency; patient feature payloads are intentionally excluded.
 
-Discuss small sample size, missing data, historical/cohort bias, distribution shift, lack of external validation, classification threshold trade-offs, and the distinction between educational prediction and clinical decision support: [ ]. Suggested next steps include external validation, calibration, subgroup performance analysis, model/data versioning, secrets and image scanning, alerting, and controlled rollout.
+![Docker image build](screenshots/docker-build.png)
 
-## 10. Evidence and references
+![Successful API prediction](screenshots/api-predict.png)
 
-- UCI Machine Learning Repository, Heart Disease dataset, DOI: <https://doi.org/10.24432/C52P4X>.
-- Code repository: [URL]
-- MLflow experiment screenshot/run IDs: [ ]
-- CI workflow screenshot/link: [ ]
-- Docker/API test screenshots: [ ]
-- Kubernetes/cloud deployment screenshots and access instructions: [ ]
-- Short pipeline walkthrough video: [location/link]# End-to-End Heart Disease MLOps Report
+## 8. Testing, CI/CD, and Repository
 
-> Complete the remaining bracketed fields with your own interpretation and submission evidence. The project has been trained and its Docker API smoke-tested locally; this workspace still has no configured GitHub remote or Kubernetes context, and genuine screenshots/video must be captured by the student.
+The test suite covers missing-value parsing, binary target mapping, feature validation, preprocessing/pipeline fit and prediction, API health and prediction behavior, metrics exposure, and HTTP 422 for an incomplete request. Six pytest tests passed locally, and Ruff linting passed.
 
-## 1. Executive summary
+The GitHub Actions workflow installs dependencies, installs the `src` package, runs Ruff, trains the models, runs pytest, generates EDA figures, and uploads training artifacts plus the MLflow database. The run for commit `1dcd8b9` completed with status **Success** in 1 minute 27 seconds. The workflow artifact contains generated training/EDA outputs; a Docker build is performed locally rather than in this CI workflow.
 
-**Objective:** Build and operationalize a reproducible binary classifier using the UCI Heart Disease Cleveland dataset.
+Repository: [https://github.com/arunkarthick2003/mlops-assignment1-a3095887](https://github.com/arunkarthick2003/mlops-assignment1-a3095887)
+CI run: [https://github.com/arunkarthick2003/mlops-assignment1-a3095887/actions/runs/39411595260](https://github.com/arunkarthick2003/mlops-assignment1-a3095887/actions/runs/39411595260)
 
-**Selected model:** [from `artifacts/training_summary.json`]
+![Successful GitHub Actions workflow](screenshots/github-actions.png)
 
-**Holdout metrics:** Accuracy [ ], precision [ ], recall [ ], ROC-AUC [ ]. Record the positive class as disease present and explain which error type is most consequential in this educational context.
+## 9. Local Kubernetes Deployment and Monitoring
 
-**Deployment status:** Local Docker image build and API smoke test passed. Kubernetes/cloud deployment is not yet verified.
+The verified deployment target is Kubernetes running locally through Docker Desktop, not a public cloud. `deployment/kubernetes.yaml` defines a two-replica Deployment with resource requests/limits and HTTP readiness/liveness probes, plus a LoadBalancer Service. The rollout reported two available replicas; both pods were running and ready. The Service was accessed through `kubectl port-forward service/heart-risk-api 8080:80`, with API health returning `{"status":"ok","model":"loaded"}`.
 
-## 2. Data and acquisition
+The LoadBalancer address belongs to the local cluster and is not a public endpoint. The public deliverable is the source repository; runtime access instructions are local port-forwarding commands. No public cloud deployment is claimed.
 
-The project downloads the official UCI Heart Disease archive (dataset DOI: 10.24432/C52P4X), extracts the processed Cleveland data, and maps the original angiographic `num` target to absence (`0`) versus presence (`1`-`4`). The Cleveland subset contains 303 observations and 13 predictors. The raw file represents unknowns with `?`; the loader converts these to missing values. Record the actual class counts and missingness from your run here: [ ].
+The API exposes Prometheus request-count and latency metrics, and `deployment/prometheus.yml` provides a scrape target configuration. API metrics and request logs were captured. A Prometheus/Grafana stack and dashboard were not deployed; monitoring demonstrated here is the `/metrics` endpoint and application logs.
 
-## 3. Exploratory analysis
+![Kubernetes rollout and service](screenshots/kubernetes-rollout.png)
 
-Generated figures: `artifacts/eda/distributions.png` and `artifacts/eda/correlation.png`. Describe the observed class balance, age distribution, notable correlations, and any limitations of interpreting these patterns from a small dataset: [ ]. Insert original figure screenshots or embed the generated images in the submitted report.
+![API metrics endpoint](screenshots/api-metrics.png)
 
-## 4. Feature processing and model selection
+## 10. Limitations, Conclusion, and References
 
-The inference and training schema contains age, sex, chest-pain type, resting blood pressure, cholesterol, fasting blood sugar, resting ECG, maximum heart rate, exercise-induced angina, ST depression, ST slope, fluoroscopy vessel count, and thalassemia category. Numeric fields receive median imputation and standard scaling. Categorical fields receive most-frequent imputation and one-hot encoding. All transformations reside in the sklearn pipeline and are fitted within cross-validation folds.
+The dataset has only 303 records and reflects an older clinical cohort. The holdout contains 61 records, so a few classifications materially change reported metrics. There is no external validation, prospective evaluation, calibration assessment, demographic subgroup analysis, drift monitoring, or threshold optimization. The one-hot/scale preprocessing and model selection are reproducible, but they do not remove dataset bias or establish clinical utility. The API must not be connected to a patient-care workflow.
 
-Candidates: Logistic Regression and Random Forest. Selection uses a stratified five-fold CV ROC-AUC grid search on the training split, with a stratified 80/20 holdout used for final reporting. Hyperparameter grids are defined in `scripts/train.py`. Fill this comparison from the MLflow experiment and `artifacts/training_summary.json`:
+Within those limits, the assignment demonstrates a reproducible workflow from UCI acquisition through model tracking, packaging, CI, local container serving, Kubernetes orchestration, and basic API monitoring. Next steps for a production research prototype would include data governance, representative external data, calibration and subgroup evaluation, versioned model/data artifacts, security review, alerting, and clinical validation by qualified professionals.
 
-| Model | CV ROC-AUC | Holdout accuracy | Precision | Recall | Holdout ROC-AUC | Best parameters |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Logistic Regression | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| Random Forest | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+**References**
 
-Explain why the selected operating point and error profile are appropriate for this assignment, and why this model must not be used for diagnosis: [ ].
+1. UCI Machine Learning Repository, Heart Disease dataset, DOI: [10.24432/C52P4X](https://doi.org/10.24432/C52P4X).
+2. scikit-learn documentation: pipelines, preprocessing, model selection, and classification metrics.
+3. MLflow documentation: experiment tracking and local backend stores.
+4. FastAPI documentation: request validation and API serving.
+5. Prometheus documentation: exposition format and scraping.
 
-## 5. Experiment tracking and reproducibility
-
-MLflow experiment: `uci-heart-disease-cleveland`. Each candidate run records model identity, CV selection parameters, seed, fold count, metrics, a classification report, evaluation plot, and the sklearn pipeline. The selected packaged model and summary are saved beneath `artifacts/`. Record the MLflow run IDs and dashboard screenshot: [ ].
-
-## 6. Testing and CI/CD
-
-Pytest covers raw parsing, unknown values, target mapping, missing feature validation, and end-to-end pipeline fitting/prediction. GitHub Actions runs Ruff, pytest, model training, and EDA, then uploads artifacts. Add the repository URL and a screenshot/link to the passing workflow run: [ ].
-
-## 7. Serving, container and deployment
-
-FastAPI exposes `/health`, `/predict`, and `/metrics`. The prediction response includes the binary label and class confidence; request logs omit patient feature values. The Docker image contains the pre-trained serialized pipeline. Kubernetes manifests provide two replicas, readiness/liveness probes, resource limits, and a LoadBalancer Service.
-
-**Docker build and sample request evidence:** [ ]
-
-**Deployment target and verified endpoint/access instructions:** [ ]
-
-**Kubernetes rollout evidence or cloud deployment URL:** [ ]
-
-## 8. Monitoring and operational considerations
-
-The Prometheus client exports request totals by method/path/status and request-duration histograms. Configure Prometheus using `deployment/prometheus.yml`; connect Grafana to Prometheus and create dashboard panels for request rate, error rate, and latency. Attach genuine screenshots and state the scrape target/status: [ ]. Do not log request bodies or retain patient data in application logs.
-
-## 9. Limitations, risks and next steps
-
-Discuss small sample size, missing data, historical/cohort bias, distribution shift, lack of external validation, classification threshold trade-offs, and the distinction between educational prediction and clinical decision support: [ ]. Suggested next steps include external validation, calibration, subgroup performance analysis, model/data versioning, secrets and image scanning, alerting, and controlled rollout.
-
-## 10. Evidence and references
-
-- UCI Machine Learning Repository, Heart Disease dataset, DOI: <https://doi.org/10.24432/C52P4X>.
-- Code repository: [URL]
-- MLflow experiment screenshot/run IDs: [ ]
-- CI workflow screenshot/link: [ ]
-- Docker/API test screenshots: [ ]
-- Kubernetes/cloud deployment screenshots and access instructions: [ ]
-- Short pipeline walkthrough video: [location/link]
+**Walkthrough video:** No recording is included in the repository yet; add your own short pipeline recording before final submission.

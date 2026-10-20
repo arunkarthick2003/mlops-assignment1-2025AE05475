@@ -11,3 +11,4 @@ prometheus-client>=0.21,<1.0
 pytest>=8.3,<9.0
 httpx2>=2.0,<3.0
 ruff>=0.8,<1.0
+python-docx>=1.1,<2.0

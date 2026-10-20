@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 data/raw/*
 artifacts/*.joblib
+artifacts/architecture.png
 artifacts/*_evaluation.png
 artifacts/eda/*.png
 artifacts/training_summary.json
